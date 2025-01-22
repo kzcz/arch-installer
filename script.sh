@@ -129,7 +129,7 @@ arch-chroot /mnt passwd root
 systemd-nspawn -D /mnt systemctl enable NetworkManager.service
 echo "($GRTR)"
 [ -n "$GRTR" ] && systemd-nspawn -D /mnt systemctl enable $GRTR
-$OS_PROBER && sed '63s/#//' /etc/default/grub
+$OS_PROBER && sed -i '63s/#//' /etc/default/grub
 $EFI && {
     arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=Arch
 } || {
