@@ -2,7 +2,7 @@
 set +hH -o posix
 alias ask='read -rep'
 [ -d /sys/firmware/efi ] && EFI=true || EFI=false
-BASEPKGS="base base-devel git neofetch networkmanager grub"
+BASEPKGS="base base-devel git neofetch networkmanager bash-completion grub"
 $EFI && BASEPKGS="$BASEPKGS efibootmgr"
 XTRAPKG=""
 LINUX=linux
@@ -52,8 +52,13 @@ select A in "XFCE base" "XFCE full" "KDE base" "KDE full" "GNOME min" "GNOME bas
     "info") echo "XFCE, KDE and GNOME are desktop environments. i3 is a window manager."; ;;
 esac; done; }
 yno "Install openssh" && XTRAPKG="$XTRAPKG openssh"
+echo
 yno "Install neofetch" && XTRAPKG="$XTRAPKG neofetch"
+echo
 yno "Install tmux" && XTRAPKG="$XTRAPKG tmux"
+echo
+$EFI && yno "Install and enable os-prober" && { XTRAPKG="$XTRAPKG os-prober"; OS_PROBER=true; } || OS_PROBER=false;
+echo
 echo "Select an editor."
 select A in nano vim emacs none; do case $A in
     nano) EDITOR=nano; break; ;;
@@ -124,6 +129,7 @@ arch-chroot /mnt passwd root
 systemd-nspawn -D /mnt systemctl enable NetworkManager.service
 echo "($GRTR)"
 [ -n "$GRTR" ] && systemd-nspawn -D /mnt systemctl enable $GRTR
+$OS_PROBER && sed '63s/#//'
 $EFI && {
     arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=Arch
 } || {
