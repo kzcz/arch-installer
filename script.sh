@@ -2,7 +2,7 @@
 set +hH -o posix
 alias ask='read -rep'
 [ -d /sys/firmware/efi ] && EFI=true || EFI=false
-BASEPKGS="base base-devel git neofetch networkmanager bash-completion grub"
+BASEPKGS="base base-devel git networkmanager bash-completion grub"
 $EFI && BASEPKGS="$BASEPKGS efibootmgr"
 XTRAPKG=""
 LINUX=linux
@@ -10,6 +10,8 @@ PRT1=vfat
 EDITOR=vim
 GRTR=''
 FSUP=''
+SHL=bash
+SHCMP=''
 yno() {
 echo "<@> $1?"
 PS3="--> "
@@ -23,7 +25,7 @@ done
 unset
 }
 echo "Installing requirements."
-pacman -Sy fzf --noconfirm --quiet
+pacman -Sy fzf rsync --noconfirm --quiet
 PS3="Linux # "
 select A in "Linux" "Linux LTS" "Linux Zen" "Linux Hardened" "info" "quit"; do case $A in 
     "quit") exit; ;;
@@ -51,14 +53,18 @@ select A in "XFCE base" "XFCE full" "KDE base" "KDE full" "GNOME min" "GNOME bas
     "i3") XTRAPKG="i3-wm i3status i3lock i3blocks dmenu xorg-server xorg-xinit xterm alacritty lightdm lightdm-gtk-greeter xorg-xinput xorg-xev"; GRTR="lightdm"; break; ;;
     "info") echo "XFCE, KDE and GNOME are desktop environments. i3 is a window manager."; ;;
 esac; done; }
-yno "Install openssh" && XTRAPKG="$XTRAPKG openssh"
-echo
-yno "Install neofetch" && XTRAPKG="$XTRAPKG neofetch"
-echo
-yno "Install tmux" && XTRAPKG="$XTRAPKG tmux"
-echo
+yno "Install openssh" && XTRAPKG="$XTRAPKG openssh"; echo
+yno "Install fastfetch" && XTRAPKG="$XTRAPKG fastfetch"; echo
+yno "Install tmux" && XTRAPKG="$XTRAPKG tmux"; echo
 $EFI && yno "Install and enable os-prober" && { XTRAPKG="$XTRAPKG os-prober"; OS_PROBER=true; } || OS_PROBER=false;
 echo
+echo "Select a shell"
+select A in bash zsh fish; do case $A in
+    bash) SHL=bash; SHCMP=""; break; ;;
+    zsh) SHL=zsh; SHCMP="zsh-autocomplete zsh-completions"; break; ;;
+    fish) SHL=fish; SHCMP=""; break; ;;
+esac; done
+XTRAPKG="$XTRAPKG $SHL $SHCMP"
 echo "Select an editor."
 select A in nano vim emacs none; do case $A in
     nano) EDITOR=nano; break; ;;
@@ -111,6 +117,7 @@ pacstrap -K /mnt $BASEPKGS $XTRAPKG $LINUX
 export LANG=$(cat /usr/share/i18n/SUPPORTED | awk '{printf $1 "\0"}' | fzf --read0 --prompt="Language> "); echo
 export TZ=$(find /usr/share/zoneinfo/ ! -wholename '*/posix/*' ! -wholename '*/right/*' ! -name '*.*' -type f | cut -b 21- | fzf --prompt='Timezone> '); echo
 ln -sf /usr/share/zoneinfo/$TZ /mnt/etc/localtime
+[ $EDITOR ] && { echo "EDITOR=$(which $EDITOR)" >> /mnt/etc/environment; }
 arch-chroot /mnt hwclock --systohc
 sed -i "s/#$LANG /$LANG /" /mnt/etc/locale.gen
 arch-chroot /mnt locale-gen
@@ -118,6 +125,7 @@ sed -i '121s/# //' /mnt/etc/sudoers
 echo "LANG=$LANG" > /mnt/etc/locale.conf
 export KEYMAP=$(localectl list-keymaps | fzf --prompt='Keymap> '); echo
 echo "KEYMAP=$KEYMAP" > /mnt/etc/vconsole.conf
+arch-chroot /mnt chsh -s $(which $SHL) $USRN
 read -rep "Hostname > " HSTN
 echo "$HSTN" > /mnt/etc/hostname
 read -rep "Username > " USRN
@@ -127,7 +135,6 @@ arch-chroot /mnt passwd $USRN
 echo "Password for root"
 arch-chroot /mnt passwd root
 systemd-nspawn -D /mnt systemctl enable NetworkManager.service
-echo "($GRTR)"
 [ -n "$GRTR" ] && systemd-nspawn -D /mnt systemctl enable $GRTR
 $OS_PROBER && sed -i '63s/#//' /etc/default/grub
 $EFI && {
@@ -136,8 +143,9 @@ $EFI && {
     arch-chroot /mnt grub-install --target=i386-pc /dev/sda
 }
 arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
-cp /etc/pacman.conf /mnt/etc/pacman.conf
+cp /etc/pacman.conf /mnt/etc/
 B='AH=$A;break; ;;\n'
 printf "#!/usr/bin/bash\necho 'Select an AUR helper to install.'\nAH=''\nselect A in paru aura yay rua; do case \$A in\n\tparu) $B\n\taura) $B\n\tyay) $B\n\trua) $B\nesac; done\ngit clone https://aur.archlinux.org/\${A}.git\ncd \$A\nmakepkg -risc\ncd ..\nrm -rfv \$A\n" > /mnt/home/$USRN/install_aur_helper.sh
 chmod 0755 /mnt/home/$USRN/install_aur_helper.sh
-sed -i '125s/# //' /mnt/etc/sudoers  
+sed -i '125s/#//' /mnt/etc/sudoers  
+echo "Once you boot onto your system, try executing ~/install_aur_helper.sh!"
