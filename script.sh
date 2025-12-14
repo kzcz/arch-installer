@@ -104,10 +104,10 @@ if $EFI; then
 else
     printf $'o\nn\n\n\n\n+1G\na\nn\n\n\n\n\np\nw\n' | fdisk -W always -w always $DISK
 fi
-mkfs.vfat ${DISK}1
-mkfs.$PRT2 -q ${DISK}2
-mount ${DISK}2 /mnt -v
-mount ${DISK}1 /mnt/boot --mkdir -v
+mkfs.vfat ${DISK}p1
+mkfs.$PRT2 -q ${DISK}p2
+mount ${DISK}p2 /mnt -v
+mount ${DISK}p1 /mnt/boot --mkdir -v
 } || { echo "mount /mnt and /mnt/boot yourself."; bash && [ -d /mnt -a -d /mnt/boot ] || {echo "Try partitioning automatically instead."; exit 1}; }
 echo "Patching pacman.conf"
 sed -i '33s/#//; 37s/#//; 37s/5/4/' /etc/pacman.conf
