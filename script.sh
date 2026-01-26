@@ -46,7 +46,7 @@ select A in "XFCE base" "XFCE full" "KDE base" "KDE full" "GNOME min" "GNOME bas
     "XFCE base") XTRAPKG="xfce4 lightdm lightdm-gtk-greeter"; GRTR="lightdm"; break; ;;
     "XFCE full") XTRAPKG="xfce4 xfce4-goodies lightdm lightdm-gtk-greeter"; GRTR="lightdm"; break; ;;
     "KDE base") XTRAPKG="plasma-desktop plasma-workspace plasma-systemmonitor systemsettings kwin kscreen powerdevil plasma-nm plasma-pa polkit-kde-agent kde-gtk-config kdeplasma-addons plasma-integration print-manager breeze flatpak-kcm plasma-activities sddm discover konsole sddm-kcm"; GRTR="sddm"; break; ;;
-    "KDE full") XTRAPKG="plasma sddm sddm-kcm"; GRTR="sddm"; break; ;;
+    "KDE full") XTRAPKG="plasma sddm konsole dolphin"; GRTR="sddm"; break; ;;
     "GNOME min") XTRAPKG="baobab gdm gnome-backgrounds gnome-calculator gnome-calendar gnome-characters gnome-clocks gnome-color-manager gnome-console gnome-contacts gnome-control-center gnome-disk-utility gnome-font-viewer gnome-keyring gnome-logs gnome-menus gnome-session gnome-settings-daemon gnome-shell gnome-shell-extensions gnome-system-monitor gnome-text-editor gnome-tour nautilus xdg-desktop-portal-gnome xdg-user-dirs-gtk"; GRTR="gdm"; break; ;;
     "GNOME base") XTRAPKG="gnome"; GRTR="gdm"; break; ;;
     "GNOME extra") XTRAPKG="gnome gnome-extra"; GRTR="gdm"; break; ;;
@@ -104,10 +104,12 @@ if $EFI; then
 else
     printf $'o\nn\n\n\n\n+1G\na\nn\n\n\n\n\np\nw\n' | fdisk -W always -w always $DISK
 fi
-mkfs.vfat ${DISK}p1
-mkfs.$PRT2 -q ${DISK}p2
-mount ${DISK}p2 /mnt -v
-mount ${DISK}p1 /mnt/boot --mkdir -v
+DISK_PREF=$([[ "${DISK: -1}" =~ [0-9] ]] && echo "p" || echo "");
+DISK="$DISK$DISK_PREF"
+mkfs.vfat ${DISK}1
+mkfs.$PRT2 -q ${DISK}2
+mount ${DISK}2 /mnt -v
+mount ${DISK}1 /mnt/boot --mkdir -v
 } || { echo "mount /mnt and /mnt/boot yourself."; bash && [ -d /mnt -a -d /mnt/boot ] || {echo "Try partitioning automatically instead."; exit 1}; }
 echo "Patching pacman.conf"
 sed -i '33s/#//; 37s/#//; 37s/5/4/' /etc/pacman.conf
