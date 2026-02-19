@@ -25,7 +25,7 @@ done
 unset
 }
 echo "Installing requirements."
-pacman -Sy fzf rsync --noconfirm --quiet
+pacman -Sy fzf rsync archlinux-keyring --noconfirm --quiet
 PS3="Linux # "
 select A in "Linux" "Linux LTS" "Linux Zen" "Linux Hardened" "info" "quit"; do case $A in 
     "quit") exit; ;;
@@ -105,16 +105,19 @@ else
     printf $'o\nn\n\n\n\n+1G\na\nn\n\n\n\n\np\nw\n' | fdisk -W always -w always $DISK
 fi
 DISK_PREF=$([[ "${DISK: -1}" =~ [0-9] ]] && echo "p" || echo "");
-DISK="$DISK$DISK_PREF"
-mkfs.vfat ${DISK}1
-mkfs.$PRT2 -q ${DISK}2
-mount ${DISK}2 /mnt -v
-mount ${DISK}1 /mnt/boot --mkdir -v
+DISK_="$DISK$DISK_PREF"
+mkfs.vfat ${DISK_}1
+mkfs.$PRT2 -q ${DISK_}2
+mount ${DISK_}2 /mnt -v
+mount ${DISK_}1 /mnt/boot --mkdir -v
 } || { echo "mount /mnt and /mnt/boot yourself."; bash && [ -d /mnt -a -d /mnt/boot ] || {echo "Try partitioning automatically instead."; exit 1}; }
 echo "Patching pacman.conf"
 sed -i '33s/#//; 37s/#//; 37s/5/4/' /etc/pacman.conf
 echo "Waiting for reflector to finish."
 wait
+export KEYMAP=$(localectl list-keymaps | fzf --prompt='Keymap> '); echo
+mkdir /mnt/etc;
+echo "KEYMAP=$KEYMAP" > /mnt/etc/vconsole.conf
 pacstrap -K /mnt $BASEPKGS $XTRAPKG $LINUX
 export LANG=$(cat /usr/share/i18n/SUPPORTED | awk '{printf $1 "\0"}' | fzf --read0 --prompt="Language> "); echo
 export TZ=$(find /usr/share/zoneinfo/ ! -wholename '*/posix/*' ! -wholename '*/right/*' ! -name '*.*' -type f | cut -b 21- | fzf --prompt='Timezone> '); echo
@@ -125,27 +128,29 @@ sed -i "s/#$LANG /$LANG /" /mnt/etc/locale.gen
 arch-chroot /mnt locale-gen
 sed -i '121s/# //' /mnt/etc/sudoers
 echo "LANG=$LANG" > /mnt/etc/locale.conf
-export KEYMAP=$(localectl list-keymaps | fzf --prompt='Keymap> '); echo
-echo "KEYMAP=$KEYMAP" > /mnt/etc/vconsole.conf
-arch-chroot /mnt chsh -s $(which $SHL) $USRN
 read -rep "Hostname > " HSTN
-echo "$HSTN" > /mnt/etc/hostname
 read -rep "Username > " USRN
-arch-chroot /mnt useradd -mG wheel,video $USRN
-echo "Password for $USRN"
-until arch-chroot /mnt passwd $USRN; do echo "passwd for $USRN failed... restarting"; done
-echo "Password for root"
-until arch-chroot /mnt passwd root; do echo "passwd for root failed... restarting"; done
-systemd-nspawn -D /mnt systemctl enable NetworkManager.service
-[ -n "$GRTR" ] && systemd-nspawn -D /mnt systemctl enable $GRTR
+arch-chroot /mnt /usr/bin/bash << EOF
+echo "$HSTN" > /etc/hostname
+useradd -mG wheel,video $USRN
+chsh -s $(which $SHL) $USRN
 $OS_PROBER && sed -i '63s/#//' /etc/default/grub
 $EFI && {
-    arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=Arch
+    grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=Arch
 } || {
-    arch-chroot /mnt grub-install --target=i386-pc /dev/sda
+    grub-install --target=i386-pc ${DISK}
 }
-arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
+grub-mkconfig -o /boot/grub/grub.cfg
+EOF
+
+read -rep "Password for $USRN" USER_PASSWD
+read -rep "Password for root" ROOT_PASSWD
+echo -e "$USRN:$USER_PASSWD\nroot:$ROOT_PASSWD" | arch-chroot /mnt chpasswd
+
 cp /etc/pacman.conf /mnt/etc/
+systemd-nspawn -D /mnt systemctl enable NetworkManager.service
+[ -n "$GRTR" ] && systemd-nspawn -D /mnt systemctl enable $GRTR
+
 B='AH=$A;break; ;;\n'
 printf "#!/usr/bin/bash\necho 'Select an AUR helper to install.'\nAH=''\nselect A in paru aura yay rua; do case \$A in\n\tparu) $B\n\taura) $B\n\tyay) $B\n\trua) $B\nesac; done\ngit clone https://aur.archlinux.org/\${A}.git\ncd \$A\nmakepkg -risc\ncd ..\nrm -rfv \$A\n" > /mnt/home/$USRN/install_aur_helper.sh
 chmod 0755 /mnt/home/$USRN/install_aur_helper.sh
